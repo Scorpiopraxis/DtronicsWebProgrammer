@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Dtronics Web Programmer — connect to your DT Drum Expansion / DRUMPROG hardware via WebUSB."
+      content="Dtronics Web Programmer — prepare and flash DT Drum Expansion / DRUMPROG sample images in the browser."
     />
     <title>Dtronics Web Programmer</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon" />
@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=0.2.0" />
+    <link rel="stylesheet" href="styles.css?v=0.3.0" />
   </head>
   <body>
     <div class="page">
@@ -28,7 +28,9 @@
           </span>
         </a>
         <div class="top-right">
-          <span id="app-version" class="version-badge" title="Build version">v0.2.0</span>
+          <span id="app-version" class="version-badge" title="Build version">v0.3.0</span>
+          <a class="top-link" href="#help">Help</a>
+          <a class="top-link" href="#about">About</a>
           <a class="top-link" href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer">
             Product page
           </a>
@@ -37,14 +39,14 @@
 
       <main class="hero">
         <p class="eyebrow">DT Drum Expansion · DRUMPROG</p>
-        <h1>Prepare &amp; connect</h1>
+        <h1>Prepare &amp; flash samples</h1>
         <p class="lede">
-          Build a 512&nbsp;KB sample image (16 × 32&nbsp;KB), then connect your Dtronics programmer over USB
-          in Chrome or Edge — no desktop install required.
+          Build a 512&nbsp;KB sample image (16 × 32&nbsp;KB), download it, and write it to your Dtronics
+          programmer over USB serial in Chrome or Edge — no desktop install required.
         </p>
 
         <div id="unsupported" class="banner banner-warn" hidden>
-          <strong id="unsupported-title">WebUSB is not available.</strong>
+          <strong id="unsupported-title">Web Serial is not available.</strong>
           <span id="unsupported-detail">
             Please open this page in
             <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>
@@ -55,7 +57,7 @@
         <div id="iframe-warning" class="banner banner-warn" hidden>
           <strong>This tool must run in its own browser tab.</strong>
           <span>
-            WebUSB cannot work inside an embedded frame. Open the programmer from the
+            Serial / USB access cannot work inside an embedded frame. Open the programmer from the
             Dtronics site using “Start Web Programmer”.
           </span>
         </div>
@@ -72,8 +74,8 @@
           </div>
 
           <p class="panel-copy">
-            Select or drop up to 16 sample files. Each file must be at most 32&nbsp;KB; smaller files are
-            padded with <code>0xFF</code>. Empty slots stay <code>0xFF</code> in the 512&nbsp;KB image.
+            Select or drop up to 16 sample files (raw binary, often <code>.bin</code>). Each file must be at most
+            32&nbsp;KB; smaller files are padded with <code>0xFF</code>. Empty slots stay <code>0xFF</code>.
           </p>
 
           <div
@@ -94,7 +96,10 @@
           <ul id="sample-list" class="sample-list" aria-live="polite"></ul>
 
           <div class="sample-toolbar">
-            <button id="btn-clear-samples" type="button" class="btn btn-ghost" disabled>Clear all</button>
+            <div class="actions">
+              <button id="btn-clear-samples" type="button" class="btn btn-ghost" disabled>Clear all</button>
+              <button id="btn-download" type="button" class="btn btn-ghost">Download combined file</button>
+            </div>
             <dl class="checksum-meta">
               <div>
                 <dt>Image size</dt>
@@ -110,13 +115,14 @@
 
         <section class="panel" aria-labelledby="connection-heading">
           <div class="panel-head">
-            <h2 id="connection-heading">Connection</h2>
+            <h2 id="connection-heading">Connection &amp; flash</h2>
             <p id="status" class="status status-idle" role="status">Not connected</p>
           </div>
 
           <p class="panel-copy">
-            Click Connect and select your Dtronics USB programmer in the browser dialog.
-            Keep this tab in the foreground while working with the device.
+            The Windows app talks to the programmer as a serial port at <strong>38400 8N1</strong>.
+            In the browser we use the <strong>Web Serial</strong> API (Chrome / Edge). Connect first, then
+            send the combined image or open an existing 512&nbsp;KB <code>.bin</code>.
           </p>
 
           <div class="actions">
@@ -126,25 +132,96 @@
 
           <dl class="device-meta" id="device-meta" hidden>
             <div>
-              <dt>Device</dt>
+              <dt>Port</dt>
               <dd id="device-name">—</dd>
             </div>
             <div>
-              <dt>Vendor / Product</dt>
-              <dd id="device-ids">—</dd>
+              <dt>Settings</dt>
+              <dd id="device-ids">38400 8N1</dd>
             </div>
           </dl>
+
+          <div class="flash-block">
+            <div class="actions">
+              <button id="btn-flash-combined" type="button" class="btn btn-primary" disabled>
+                Send combined file
+              </button>
+              <label class="btn btn-ghost btn-file" id="label-flash-file">
+                Open file and send
+                <input id="file-flash" type="file" accept=".bin,application/octet-stream" hidden />
+              </label>
+            </div>
+            <div class="progress-row">
+              <progress id="flash-progress" max="100" value="0"></progress>
+              <span id="flash-progress-label" class="progress-label">0%</span>
+            </div>
+            <p class="panel-copy flash-checksum">
+              Transfer checksum: <code id="flash-checksum">—</code>
+            </p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="received-heading">
+          <div class="panel-head">
+            <h2 id="received-heading">Data received</h2>
+            <button id="btn-clear-received" type="button" class="btn btn-tiny">Clear</button>
+          </div>
+          <p class="panel-copy">
+            Feedback from the programmer (if the firmware sends any) appears here while connected.
+          </p>
+          <pre id="received-log" class="received-log" aria-live="polite">No data received yet.</pre>
+        </section>
+
+        <section class="panel" id="help" aria-labelledby="help-heading">
+          <div class="panel-head">
+            <h2 id="help-heading">Help</h2>
+          </div>
+          <ol class="help-steps">
+            <li>Open this page in <strong>Chrome</strong> or <strong>Edge</strong> (desktop, HTTPS).</li>
+            <li>Add up to 16 sample files (max 32&nbsp;KB each) — select or drag and drop.</li>
+            <li>Optional: <strong>Download combined file</strong> for a 512&nbsp;KB backup.</li>
+            <li><strong>Connect</strong> and choose your Dtronics USB serial programmer.</li>
+            <li><strong>Send combined file</strong>, or <strong>Open file and send</strong> an existing 512&nbsp;KB image.</li>
+          </ol>
+          <p class="panel-copy">
+            More information:
+            <a href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer"
+              >https://www.dtronics.nl/dt-drum-expansion</a
+            >
+          </p>
+        </section>
+
+        <section class="panel" id="about" aria-labelledby="about-heading">
+          <div class="panel-head">
+            <h2 id="about-heading">About</h2>
+          </div>
+          <p class="about-title">Dtronics Web Programmer</p>
+          <p class="panel-copy">
+            Browser tool for the DT Drum Expansion / DRUMPROG ecosystem. Same 512&nbsp;KB memory model as the
+            Windows Sample Expansion App.
+          </p>
+          <p class="panel-copy">
+            This software is written for Dtronics by Engineers@work.<br />
+            <span id="about-copy">(c) 2023 – present Engineers@work</span><br />
+            All rights reserved.
+          </p>
+          <p class="panel-copy">
+            <a href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer"
+              >https://www.dtronics.nl/dt-drum-expansion</a
+            >
+          </p>
         </section>
 
         <p class="footnote">
-          Coming next: download combined file and flash via WebUSB.
           Hardware support:
-          <a href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer">dtronics.nl/dt-drum-expansion</a>
+          <a href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer"
+            >dtronics.nl/dt-drum-expansion</a
+          >
         </p>
         <p id="env-debug" class="env-debug" aria-live="polite"></p>
       </main>
     </div>
 
-    <script type="module" src="app.js?v=0.2.0"></script>
+    <script type="module" src="app.js?v=0.3.0"></script>
   </body>
 </html>

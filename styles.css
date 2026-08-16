@@ -446,6 +446,96 @@ code {
   font-size: 0.85em;
 }
 
+.flash-block {
+  margin-top: 1.35rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.progress-row progress {
+  flex: 1;
+  height: 0.65rem;
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.progress-row progress::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.progress-row progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #d35400, var(--accent));
+  border-radius: 999px;
+  transition: width 0.12s ease;
+}
+
+.progress-row progress::-moz-progress-bar {
+  background: linear-gradient(90deg, #d35400, var(--accent));
+  border-radius: 999px;
+}
+
+.progress-label {
+  min-width: 2.75rem;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.flash-checksum {
+  margin: 0.75rem 0 0;
+}
+
+.btn-file.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.received-log {
+  margin: 0;
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(0, 0, 0, 0.28);
+  color: #c8d2dc;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.help-steps {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.help-steps li + li {
+  margin-top: 0.45rem;
+}
+
+.about-title {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
 @media (max-width: 560px) {
   .sample-item {
     flex-direction: column;
@@ -455,9 +545,7 @@ code {
   .sample-item-actions {
     justify-content: flex-end;
   }
-}
 
-@media (max-width: 560px) {
   .top {
     margin-bottom: 2rem;
   }
@@ -465,5 +553,10 @@ code {
   .panel-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .top-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
