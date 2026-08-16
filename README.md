@@ -46,8 +46,8 @@ An empty array lets the user choose any USB device (useful while identifying IDs
 
 Related stories live in the private Windows-app repo (`DtronicsSampleExpansionApp`):
 
-1. Hosting + WebUSB connect (this project)
-2. Sample File Creator (16 × 32 KB → 512 KB)
+1. Hosting + WebUSB connect — done
+2. Sample File Creator (16 × 32 KB → 512 KB) — done in this app (`v0.2.0`)
 3. Download combined file
 4. Flash 512 KB via WebUSB
 5. Device feedback log

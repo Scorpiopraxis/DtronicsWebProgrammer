@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=0.1.2" />
+    <link rel="stylesheet" href="styles.css?v=0.2.0" />
   </head>
   <body>
     <div class="page">
@@ -28,7 +28,7 @@
           </span>
         </a>
         <div class="top-right">
-          <span id="app-version" class="version-badge" title="Build version">v0.1.2</span>
+          <span id="app-version" class="version-badge" title="Build version">v0.2.0</span>
           <a class="top-link" href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer">
             Product page
           </a>
@@ -37,10 +37,10 @@
 
       <main class="hero">
         <p class="eyebrow">DT Drum Expansion · DRUMPROG</p>
-        <h1>Connect your expansion unit</h1>
+        <h1>Prepare &amp; connect</h1>
         <p class="lede">
-          Open this page in Chrome or Edge, connect your Dtronics programmer over USB,
-          and prepare samples without installing desktop software.
+          Build a 512&nbsp;KB sample image (16 × 32&nbsp;KB), then connect your Dtronics programmer over USB
+          in Chrome or Edge — no desktop install required.
         </p>
 
         <div id="unsupported" class="banner banner-warn" hidden>
@@ -59,6 +59,54 @@
             Dtronics site using “Start Web Programmer”.
           </span>
         </div>
+
+        <div id="sample-alert" class="banner banner-warn" hidden role="alert">
+          <strong id="sample-alert-title">Notice</strong>
+          <span id="sample-alert-detail"></span>
+        </div>
+
+        <section class="panel" aria-labelledby="samples-heading">
+          <div class="panel-head">
+            <h2 id="samples-heading">Sample file creator</h2>
+            <p class="status status-idle" id="sample-count" role="status">0 / 16 samples</p>
+          </div>
+
+          <p class="panel-copy">
+            Select or drop up to 16 sample files. Each file must be at most 32&nbsp;KB; smaller files are
+            padded with <code>0xFF</code>. Empty slots stay <code>0xFF</code> in the 512&nbsp;KB image.
+          </p>
+
+          <div
+            id="dropzone"
+            class="dropzone"
+            tabindex="0"
+            role="button"
+            aria-label="Drop sample files here or choose files"
+          >
+            <p class="dropzone-title">Drop sample files here</p>
+            <p class="dropzone-hint">or</p>
+            <label class="btn btn-primary btn-file">
+              Select files
+              <input id="file-input" type="file" multiple hidden />
+            </label>
+          </div>
+
+          <ul id="sample-list" class="sample-list" aria-live="polite"></ul>
+
+          <div class="sample-toolbar">
+            <button id="btn-clear-samples" type="button" class="btn btn-ghost" disabled>Clear all</button>
+            <dl class="checksum-meta">
+              <div>
+                <dt>Image size</dt>
+                <dd>512 KB</dd>
+              </div>
+              <div>
+                <dt>Checksum</dt>
+                <dd id="checksum-value">0000</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
 
         <section class="panel" aria-labelledby="connection-heading">
           <div class="panel-head">
@@ -89,7 +137,7 @@
         </section>
 
         <p class="footnote">
-          Coming next: sample file creator and 512&nbsp;KB flash (see project roadmap).
+          Coming next: download combined file and flash via WebUSB.
           Hardware support:
           <a href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer">dtronics.nl/dt-drum-expansion</a>
         </p>
@@ -97,6 +145,6 @@
       </main>
     </div>
 
-    <script type="module" src="app.js?v=0.1.2"></script>
+    <script type="module" src="app.js?v=0.2.0"></script>
   </body>
 </html>
