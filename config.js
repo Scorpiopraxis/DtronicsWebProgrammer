@@ -2,7 +2,7 @@
  * Bump this on every deploy so users can verify they are not on a cached build.
  * Format: major.minor.patch
  */
-export const APP_VERSION = "0.1.1";
+export const APP_VERSION = "0.1.2";
 
 /**
  * USB device filters for navigator.usb.requestDevice.

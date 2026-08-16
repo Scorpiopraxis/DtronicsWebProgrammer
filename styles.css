@@ -163,6 +163,10 @@ a {
   border: 1px solid transparent;
 }
 
+.banner[hidden] {
+  display: none !important;
+}
+
 .banner-warn {
   background: var(--warn-soft);
   border-color: rgba(240, 180, 41, 0.35);
