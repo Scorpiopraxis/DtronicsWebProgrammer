@@ -1,11 +1,20 @@
-import { APP_VERSION, usbDeviceFilters } from "./config.js";
+import {
+  APP_VERSION,
+  COMBINED_FILENAME,
+  SERIAL_OPTIONS,
+  productPageUrl,
+} from "./config.js";
 import {
   BLOCK_COUNT,
   BLOCK_SIZE,
+  IMAGE_SIZE,
   calculateChecksum,
   combineEntries,
+  downloadBinary,
   fileToSampleSlot,
 } from "./sample-array.js";
+
+const WRITE_CHUNK = 4096;
 
 const els = {
   unsupported: document.getElementById("unsupported"),
@@ -29,28 +38,47 @@ const els = {
   sampleCount: document.getElementById("sample-count"),
   checksumValue: document.getElementById("checksum-value"),
   btnClearSamples: document.getElementById("btn-clear-samples"),
+  btnDownload: document.getElementById("btn-download"),
+  btnFlashCombined: document.getElementById("btn-flash-combined"),
+  fileFlash: document.getElementById("file-flash"),
+  labelFlashFile: document.getElementById("label-flash-file"),
+  flashProgress: document.getElementById("flash-progress"),
+  flashProgressLabel: document.getElementById("flash-progress-label"),
+  flashChecksum: document.getElementById("flash-checksum"),
+  receivedLog: document.getElementById("received-log"),
+  btnClearReceived: document.getElementById("btn-clear-received"),
+  aboutCopy: document.getElementById("about-copy"),
 };
 
-/** @type {USBDevice | null} */
-let device = null;
+/** @type {SerialPort | null} */
+let port = null;
+
+/** @type {ReadableStreamDefaultReader<Uint8Array> | null} */
+let reader = null;
+
+/** @type {AbortController | null} */
+let readAbort = null;
+
+let flashing = false;
+let receivedEmpty = true;
 
 /** @type {import("./sample-array.js").SampleSlot[]} */
 let samples = [];
 
-function supportsWebUsb() {
-  return typeof navigator !== "undefined" && !!navigator.usb;
+function supportsWebSerial() {
+  return typeof navigator !== "undefined" && !!navigator.serial;
 }
 
-function getWebUsbBlockReason() {
+function getWebSerialBlockReason() {
   const isFile = location.protocol === "file:";
   const secure = window.isSecureContext === true;
-  const hasUsb = typeof navigator !== "undefined" && !!navigator.usb;
+  const hasSerial = supportsWebSerial();
 
   if (isFile) {
     return {
       title: "This page was opened as a local file.",
       detail:
-        "WebUSB does not work via file://. Open the live site: https://scorpiopraxis.github.io/DtronicsWebProgrammer/ (or use a local server such as npx serve .).",
+        "Web Serial does not work via file://. Open the live site: https://scorpiopraxis.github.io/DtronicsWebProgrammer/ (or use a local server such as npx serve .).",
     };
   }
 
@@ -58,15 +86,15 @@ function getWebUsbBlockReason() {
     return {
       title: "This page is not a secure context.",
       detail:
-        "WebUSB requires HTTPS (or http://localhost). Open https://scorpiopraxis.github.io/DtronicsWebProgrammer/",
+        "Web Serial requires HTTPS (or http://localhost). Open https://scorpiopraxis.github.io/DtronicsWebProgrammer/",
     };
   }
 
-  if (!hasUsb) {
+  if (!hasSerial) {
     return {
-      title: "WebUSB is not available in this browser.",
+      title: "Web Serial is not available in this browser.",
       detail:
-        "Use desktop Google Chrome or Microsoft Edge. If you already do: check chrome://policy for WebUSB disabled by organization policy, or try a normal (non-managed) Chrome profile.",
+        "Use desktop Google Chrome or Microsoft Edge. If you already do: check chrome://policy for Serial disabled by organization policy, or try a normal (non-managed) Chrome profile.",
     };
   }
 
@@ -97,18 +125,45 @@ function hideSampleAlert() {
   els.sampleAlertDetail.textContent = "";
 }
 
-function hexId(value) {
-  return `0x${value.toString(16).toUpperCase().padStart(4, "0")}`;
-}
-
 function formatBytes(size) {
   if (size < 1024) return `${size} B`;
   return `${(size / 1024).toFixed(size % 1024 === 0 ? 0 : 1)} KB`;
 }
 
+function getCombinedImage() {
+  return combineEntries(samples.map((s) => s.data));
+}
+
 function rebuildChecksum() {
-  const image = combineEntries(samples.map((s) => s.data));
-  els.checksumValue.textContent = calculateChecksum(image);
+  els.checksumValue.textContent = calculateChecksum(getCombinedImage());
+}
+
+function setProgress(pct) {
+  const value = Math.max(0, Math.min(100, Math.round(pct)));
+  els.flashProgress.value = value;
+  els.flashProgressLabel.textContent = `${value}%`;
+}
+
+function setFlashUiBusy(busy) {
+  flashing = busy;
+  const connected = !!port;
+  els.btnConnect.disabled = busy || connected || !supportsWebSerial();
+  els.btnDisconnect.disabled = busy || !connected;
+  els.btnFlashCombined.disabled = busy || !connected;
+  els.fileFlash.disabled = busy || !connected;
+  if (els.labelFlashFile) {
+    els.labelFlashFile.classList.toggle("is-disabled", busy || !connected);
+  }
+}
+
+function updateFlashButtons() {
+  if (flashing) return;
+  const connected = !!port;
+  els.btnFlashCombined.disabled = !connected;
+  els.fileFlash.disabled = !connected;
+  if (els.labelFlashFile) {
+    els.labelFlashFile.classList.toggle("is-disabled", !connected);
+  }
 }
 
 function renderSampleList() {
@@ -231,39 +286,204 @@ async function addFiles(fileList) {
   renderSampleList();
 }
 
-function renderDevice(usbDevice) {
-  const name =
-    usbDevice.productName?.trim() ||
-    usbDevice.manufacturerName?.trim() ||
-    "USB device";
-  els.deviceName.textContent = name;
-  els.deviceIds.textContent = `${hexId(usbDevice.vendorId)} / ${hexId(usbDevice.productId)}`;
+function downloadCombined() {
+  const image = getCombinedImage();
+  downloadBinary(image, COMBINED_FILENAME);
+  els.flashChecksum.textContent = calculateChecksum(image);
+}
+
+function portLabel(serialPort) {
+  const info = serialPort.getInfo?.() ?? {};
+  const bits = [];
+  if (info.usbVendorId != null) {
+    bits.push(`VID 0x${info.usbVendorId.toString(16).toUpperCase().padStart(4, "0")}`);
+  }
+  if (info.usbProductId != null) {
+    bits.push(`PID 0x${info.usbProductId.toString(16).toUpperCase().padStart(4, "0")}`);
+  }
+  return bits.length ? bits.join(" / ") : "Serial port";
+}
+
+function renderPort(serialPort) {
+  els.deviceName.textContent = portLabel(serialPort);
+  els.deviceIds.textContent = "38400 8N1";
   els.deviceMeta.hidden = false;
 }
 
-function clearDeviceUi() {
+function clearPortUi() {
   els.deviceMeta.hidden = true;
   els.deviceName.textContent = "—";
-  els.deviceIds.textContent = "—";
+  els.deviceIds.textContent = "38400 8N1";
+}
+
+function appendReceived(text) {
+  if (!text) return;
+  if (receivedEmpty) {
+    els.receivedLog.textContent = "";
+    receivedEmpty = false;
+  }
+  els.receivedLog.textContent += text;
+  els.receivedLog.scrollTop = els.receivedLog.scrollHeight;
+}
+
+function clearReceived() {
+  els.receivedLog.textContent = "No data received yet.";
+  receivedEmpty = true;
+}
+
+async function stopReading() {
+  readAbort?.abort();
+  readAbort = null;
+
+  if (reader) {
+    try {
+      await reader.cancel();
+    } catch {
+      /* ignore */
+    }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* ignore */
+    }
+    reader = null;
+  }
+}
+
+async function startReading(serialPort) {
+  await stopReading();
+  if (!serialPort.readable) return;
+
+  readAbort = new AbortController();
+  const decoder = new TextDecoder();
+  reader = serialPort.readable.getReader();
+
+  void (async () => {
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value?.byteLength) {
+          appendReceived(decoder.decode(value, { stream: true }));
+        }
+      }
+      appendReceived(decoder.decode());
+    } catch (err) {
+      if (readAbort && !readAbort.signal.aborted) {
+        console.error(err);
+      }
+    } finally {
+      try {
+        reader?.releaseLock();
+      } catch {
+        /* ignore */
+      }
+      reader = null;
+    }
+  })();
+}
+
+/**
+ * Write raw bytes in chunks (same as Windows: full 512 KB dump @ 38400).
+ * @param {Uint8Array} data
+ */
+async function writeImage(data) {
+  if (!port?.writable) {
+    throw new Error("Serial port is not writable");
+  }
+  if (data.byteLength !== IMAGE_SIZE) {
+    throw new Error(`Image must be exactly ${IMAGE_SIZE} bytes (got ${data.byteLength})`);
+  }
+
+  const writer = port.writable.getWriter();
+  setProgress(0);
+  els.flashChecksum.textContent = "—";
+
+  try {
+    let offset = 0;
+    while (offset < data.byteLength) {
+      const end = Math.min(offset + WRITE_CHUNK, data.byteLength);
+      await writer.write(data.subarray(offset, end));
+      offset = end;
+      setProgress((offset / data.byteLength) * 100);
+    }
+    els.flashChecksum.textContent = calculateChecksum(data);
+  } finally {
+    writer.releaseLock();
+  }
+}
+
+async function flashCombined() {
+  if (!port || flashing) return;
+  setFlashUiBusy(true);
+  setStatus("Writing 512 KB…", "connected");
+  try {
+    await writeImage(getCombinedImage());
+    setStatus("Transfer complete", "connected");
+  } catch (err) {
+    console.error(err);
+    setStatus("Transfer failed", "error");
+    showSampleAlert(
+      "Flash failed",
+      err instanceof Error ? err.message : String(err),
+    );
+  } finally {
+    setFlashUiBusy(false);
+    updateFlashButtons();
+  }
+}
+
+/**
+ * @param {File} file
+ */
+async function flashFile(file) {
+  if (!port || flashing) return;
+
+  if (file.size !== IMAGE_SIZE) {
+    showSampleAlert(
+      "Filesize error",
+      `File "${file.name}" is not exact 512 KB.\nSize: ${file.size} bytes`,
+    );
+    return;
+  }
+
+  setFlashUiBusy(true);
+  setStatus("Writing 512 KB…", "connected");
+  hideSampleAlert();
+
+  try {
+    const buffer = await file.arrayBuffer();
+    await writeImage(new Uint8Array(buffer));
+    setStatus("Transfer complete", "connected");
+  } catch (err) {
+    console.error(err);
+    setStatus("Transfer failed", "error");
+    showSampleAlert(
+      "Flash failed",
+      err instanceof Error ? err.message : String(err),
+    );
+  } finally {
+    setFlashUiBusy(false);
+    updateFlashButtons();
+  }
 }
 
 async function connect() {
-  if (!supportsWebUsb()) {
-    setStatus("WebUSB unavailable", "error");
+  if (!supportsWebSerial()) {
+    setStatus("Web Serial unavailable", "error");
     return;
   }
 
   try {
-    const selected = await navigator.usb.requestDevice({
-      filters: usbDeviceFilters,
-    });
-
-    await selected.open();
-    device = selected;
-    renderDevice(selected);
+    const selected = await navigator.serial.requestPort();
+    await selected.open(SERIAL_OPTIONS);
+    port = selected;
+    renderPort(selected);
+    await startReading(selected);
     setStatus("Connected", "connected");
     els.btnConnect.disabled = true;
     els.btnDisconnect.disabled = false;
+    updateFlashButtons();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (/cancel|denied|abort/i.test(message)) {
@@ -276,26 +496,28 @@ async function connect() {
 }
 
 async function disconnect() {
-  if (!device) {
+  await stopReading();
+
+  if (!port) {
     setStatus("Not connected", "idle");
-    els.btnConnect.disabled = !supportsWebUsb();
+    els.btnConnect.disabled = !supportsWebSerial();
     els.btnDisconnect.disabled = true;
-    clearDeviceUi();
+    clearPortUi();
+    updateFlashButtons();
     return;
   }
 
   try {
-    if (device.opened) {
-      await device.close();
-    }
+    await port.close();
   } catch (err) {
     console.error(err);
   } finally {
-    device = null;
-    clearDeviceUi();
+    port = null;
+    clearPortUi();
     setStatus("Not connected", "idle");
     els.btnConnect.disabled = false;
     els.btnDisconnect.disabled = true;
+    updateFlashButtons();
   }
 }
 
@@ -303,13 +525,17 @@ function showEnvDebug() {
   if (els.appVersion) {
     els.appVersion.textContent = `v${APP_VERSION}`;
   }
+  if (els.aboutCopy) {
+    const year = new Date().getFullYear();
+    els.aboutCopy.textContent = `(c) 2023 – ${year} Engineers@work`;
+  }
   if (!els.envDebug) return;
 
   const parts = [
     `v${APP_VERSION}`,
     `protocol=${location.protocol.replace(":", "")}`,
     `secure=${window.isSecureContext ? "yes" : "no"}`,
-    `navigator.usb=${navigator.usb ? "yes" : "no"}`,
+    `navigator.serial=${navigator.serial ? "yes" : "no"}`,
     `ua=${navigator.userAgentData?.brands?.map((b) => b.brand).join(", ") || navigator.userAgent.slice(0, 80)}`,
   ];
   els.envDebug.textContent = parts.join(" · ");
@@ -325,6 +551,7 @@ function initSampleCreator() {
   });
 
   els.btnClearSamples.addEventListener("click", clearSamples);
+  els.btnDownload.addEventListener("click", downloadCombined);
 
   const zone = els.dropzone;
 
@@ -359,19 +586,38 @@ function initSampleCreator() {
   renderSampleList();
 }
 
+function initFlash() {
+  els.btnFlashCombined.addEventListener("click", () => {
+    void flashCombined();
+  });
+
+  els.fileFlash.addEventListener("change", () => {
+    const file = els.fileFlash.files?.[0];
+    els.fileFlash.value = "";
+    if (file) {
+      void flashFile(file);
+    }
+  });
+
+  els.btnClearReceived.addEventListener("click", clearReceived);
+  updateFlashButtons();
+  setProgress(0);
+}
+
 function initConnection() {
   if (isEmbeddedFrame()) {
     els.iframeWarning.hidden = false;
     els.btnConnect.disabled = true;
     els.btnDisconnect.disabled = true;
     setStatus("Blocked in iframe", "error");
+    updateFlashButtons();
     return;
   }
 
-  const block = getWebUsbBlockReason();
-  if (block || !supportsWebUsb()) {
+  const block = getWebSerialBlockReason();
+  if (block || !supportsWebSerial()) {
     const reason = block ?? {
-      title: "WebUSB is not available in this browser.",
+      title: "Web Serial is not available in this browser.",
       detail:
         "Please open this page in Google Chrome or Microsoft Edge on a desktop computer.",
     };
@@ -380,7 +626,8 @@ function initConnection() {
     els.unsupported.hidden = false;
     els.btnConnect.disabled = true;
     els.btnDisconnect.disabled = true;
-    setStatus("WebUSB unavailable", "error");
+    setStatus("Web Serial unavailable", "error");
+    updateFlashButtons();
     return;
   }
 
@@ -391,13 +638,16 @@ function initConnection() {
     void disconnect();
   });
 
-  navigator.usb.addEventListener("disconnect", (event) => {
-    if (device && event.device === device) {
-      device = null;
-      clearDeviceUi();
+  navigator.serial.addEventListener("disconnect", (event) => {
+    const disconnected = /** @type {SerialConnectionEvent} */ (event).port;
+    if (port && disconnected === port) {
+      void stopReading();
+      port = null;
+      clearPortUi();
       setStatus("Disconnected", "idle");
       els.btnConnect.disabled = false;
       els.btnDisconnect.disabled = true;
+      updateFlashButtons();
     }
   });
 }
@@ -405,18 +655,14 @@ function initConnection() {
 function init() {
   showEnvDebug();
   initSampleCreator();
+  initFlash();
   initConnection();
 }
 
 init();
 
-// Exported for upcoming stories (download / flash).
-export function getCombinedImage() {
-  return combineEntries(samples.map((s) => s.data));
-}
-
 export function getSampleCount() {
   return samples.length;
 }
 
-export { BLOCK_SIZE, BLOCK_COUNT };
+export { BLOCK_SIZE, BLOCK_COUNT, IMAGE_SIZE, getCombinedImage, productPageUrl };

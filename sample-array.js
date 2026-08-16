@@ -78,3 +78,19 @@ export async function fileToSampleSlot(file) {
     data: padSampleToBlock(bytes),
   };
 }
+
+/**
+ * @param {Uint8Array} image
+ * @param {string} filename
+ */
+export function downloadBinary(image, filename) {
+  const blob = new Blob([image], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
