@@ -1,4 +1,4 @@
-import { usbDeviceFilters } from "./config.js";
+import { APP_VERSION, usbDeviceFilters } from "./config.js";
 
 const els = {
   unsupported: document.getElementById("unsupported"),
@@ -11,6 +11,8 @@ const els = {
   deviceMeta: document.getElementById("device-meta"),
   deviceName: document.getElementById("device-name"),
   deviceIds: document.getElementById("device-ids"),
+  appVersion: document.getElementById("app-version"),
+  envDebug: document.getElementById("env-debug"),
 };
 
 /** @type {USBDevice | null} */
@@ -137,7 +139,25 @@ async function disconnect() {
   }
 }
 
+function showEnvDebug() {
+  if (els.appVersion) {
+    els.appVersion.textContent = `v${APP_VERSION}`;
+  }
+  if (!els.envDebug) return;
+
+  const parts = [
+    `v${APP_VERSION}`,
+    `protocol=${location.protocol.replace(":", "")}`,
+    `secure=${window.isSecureContext ? "yes" : "no"}`,
+    `navigator.usb=${navigator.usb ? "yes" : "no"}`,
+    `ua=${navigator.userAgentData?.brands?.map((b) => b.brand).join(", ") || navigator.userAgent.slice(0, 80)}`,
+  ];
+  els.envDebug.textContent = parts.join(" · ");
+}
+
 function init() {
+  showEnvDebug();
+
   if (isEmbeddedFrame()) {
     els.iframeWarning.hidden = false;
     els.btnConnect.disabled = true;

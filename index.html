@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=0.1.1" />
   </head>
   <body>
     <div class="page">
@@ -27,9 +27,12 @@
             <span class="brand-product">Web Programmer</span>
           </span>
         </a>
-        <a class="top-link" href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer">
-          Product page
-        </a>
+        <div class="top-right">
+          <span id="app-version" class="version-badge" title="Build version">v0.1.1</span>
+          <a class="top-link" href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer">
+            Product page
+          </a>
+        </div>
       </header>
 
       <main class="hero">
@@ -90,9 +93,10 @@
           Hardware support:
           <a href="https://www.dtronics.nl/dt-drum-expansion" target="_blank" rel="noopener noreferrer">dtronics.nl/dt-drum-expansion</a>
         </p>
+        <p id="env-debug" class="env-debug" aria-live="polite"></p>
       </main>
     </div>
 
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=0.1.1"></script>
   </body>
 </html>
