@@ -2,6 +2,8 @@ import { usbDeviceFilters } from "./config.js";
 
 const els = {
   unsupported: document.getElementById("unsupported"),
+  unsupportedTitle: document.getElementById("unsupported-title"),
+  unsupportedDetail: document.getElementById("unsupported-detail"),
   iframeWarning: document.getElementById("iframe-warning"),
   status: document.getElementById("status"),
   btnConnect: document.getElementById("btn-connect"),
@@ -15,7 +17,39 @@ const els = {
 let device = null;
 
 function supportsWebUsb() {
-  return typeof navigator !== "undefined" && "usb" in navigator;
+  return typeof navigator !== "undefined" && !!navigator.usb;
+}
+
+function getWebUsbBlockReason() {
+  const isFile = location.protocol === "file:";
+  const secure = window.isSecureContext === true;
+  const hasUsb = typeof navigator !== "undefined" && !!navigator.usb;
+
+  if (isFile) {
+    return {
+      title: "This page was opened as a local file.",
+      detail:
+        "WebUSB does not work via file://. Open the live site: https://scorpiopraxis.github.io/DtronicsWebProgrammer/ (or use a local server such as npx serve .).",
+    };
+  }
+
+  if (!secure) {
+    return {
+      title: "This page is not a secure context.",
+      detail:
+        "WebUSB requires HTTPS (or http://localhost). Open https://scorpiopraxis.github.io/DtronicsWebProgrammer/",
+    };
+  }
+
+  if (!hasUsb) {
+    return {
+      title: "WebUSB is not available in this browser.",
+      detail:
+        "Use desktop Google Chrome or Microsoft Edge. If you already do: check chrome://policy for WebUSB disabled by organization policy, or try a normal (non-managed) Chrome profile.",
+    };
+  }
+
+  return null;
 }
 
 function isEmbeddedFrame() {
@@ -112,7 +146,15 @@ function init() {
     return;
   }
 
-  if (!supportsWebUsb()) {
+  const block = getWebUsbBlockReason();
+  if (block || !supportsWebUsb()) {
+    const reason = block ?? {
+      title: "WebUSB is not available in this browser.",
+      detail:
+        "Please open this page in Google Chrome or Microsoft Edge on a desktop computer.",
+    };
+    els.unsupportedTitle.textContent = reason.title;
+    els.unsupportedDetail.textContent = reason.detail;
     els.unsupported.hidden = false;
     els.btnConnect.disabled = true;
     els.btnDisconnect.disabled = true;
