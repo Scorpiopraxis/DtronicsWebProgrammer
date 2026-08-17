@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="88" viewBox="0 0 420 88" role="img" aria-label="Start Web Programmer">
+  <defs>
+    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f06a14"/>
+      <stop offset="100%" stop-color="#e85d04"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-40%" width="140%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#e85d04" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+  <rect x="8" y="10" width="404" height="68" rx="34" fill="url(#fill)" filter="url(#glow)"/>
+  <rect x="20" y="18" width="52" height="52" rx="14" fill="rgba(12,16,20,0.22)"/>
+  <text x="46" y="51" text-anchor="middle" fill="#fff" font-family="DM Sans, Arial, sans-serif" font-size="18" font-weight="700">DT</text>
+  <text x="86" y="42" fill="#fff" font-family="DM Sans, Arial, sans-serif" font-size="18" font-weight="700">Start Web Programmer</text>
+  <text x="86" y="62" fill="#fff" fill-opacity="0.88" font-family="DM Sans, Arial, sans-serif" font-size="13" font-weight="500">Chrome or Edge · no install</text>
+</svg>
