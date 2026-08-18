@@ -1,6 +1,7 @@
 import {
   APP_VERSION,
   COMBINED_FILENAME,
+  SERIAL_BITS_PER_BYTE,
   SERIAL_OPTIONS,
   productPageUrl,
 } from "./config.js";
@@ -138,10 +139,29 @@ function rebuildChecksum() {
   els.checksumValue.textContent = calculateChecksum(getCombinedImage());
 }
 
-function setProgress(pct) {
+function formatRemaining(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 1) return "";
+  const m = Math.floor(sec / 60);
+  const s = String(sec % 60).padStart(2, "0");
+  return m > 0 ? ` · ${m}:${s} left` : ` · ${sec}s left`;
+}
+
+function wireDurationMs(byteLength) {
+  return (byteLength * SERIAL_BITS_PER_BYTE * 1000) / SERIAL_OPTIONS.baudRate;
+}
+
+function setProgress(pct, remainingMs) {
   const value = Math.max(0, Math.min(100, Math.round(pct)));
   els.flashProgress.value = value;
-  els.flashProgressLabel.textContent = `${value}%`;
+  const left = remainingMs != null && value < 100 ? formatRemaining(remainingMs) : "";
+  els.flashProgressLabel.textContent = `${value}%${left}`;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function setFlashUiBusy(busy) {
@@ -385,6 +405,8 @@ async function startReading(serialPort) {
 
 /**
  * Write raw bytes in chunks (same as Windows: full 512 KB dump @ 38400).
+ * Progress follows estimated UART time: writer.write() resolves when the browser
+ * accepts bytes, not when they have shifted out at 38400 baud (~2¼ min for 512 KB).
  * @param {Uint8Array} data
  */
 async function writeImage(data) {
@@ -396,19 +418,42 @@ async function writeImage(data) {
   }
 
   const writer = port.writable.getWriter();
-  setProgress(0);
+  const total = data.byteLength;
+  const wireMs = wireDurationMs(total);
+  const started = performance.now();
+  let queued = 0;
+  let raf = 0;
+
+  const tickProgress = () => {
+    const elapsed = performance.now() - started;
+    const onWire = Math.min(queued, (elapsed / wireMs) * total);
+    setProgress((onWire / total) * 100, Math.max(0, wireMs - elapsed));
+    raf = requestAnimationFrame(tickProgress);
+  };
+
+  setProgress(0, wireMs);
   els.flashChecksum.textContent = "—";
+  raf = requestAnimationFrame(tickProgress);
 
   try {
-    let offset = 0;
-    while (offset < data.byteLength) {
-      const end = Math.min(offset + WRITE_CHUNK, data.byteLength);
-      await writer.write(data.subarray(offset, end));
-      offset = end;
-      setProgress((offset / data.byteLength) * 100);
+    while (queued < total) {
+      const end = Math.min(queued + WRITE_CHUNK, total);
+      await writer.ready;
+      await writer.write(data.subarray(queued, end));
+      queued = end;
     }
+
+    const remaining = wireMs - (performance.now() - started);
+    if (remaining > 0) {
+      await sleep(remaining);
+    }
+
+    cancelAnimationFrame(raf);
+    raf = 0;
+    setProgress(100);
     els.flashChecksum.textContent = calculateChecksum(data);
   } finally {
+    if (raf) cancelAnimationFrame(raf);
     writer.releaseLock();
   }
 }
