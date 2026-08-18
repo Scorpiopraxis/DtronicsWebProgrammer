@@ -3,6 +3,11 @@ import {
   COMBINED_FILENAME,
   SERIAL_BITS_PER_BYTE,
   SERIAL_OPTIONS,
+  SERIAL_PORT_FILTERS,
+  USB_MANUFACTURER,
+  USB_PRODUCT,
+  USB_PRODUCT_ID,
+  USB_VENDOR_ID,
   productPageUrl,
 } from "./config.js";
 import {
@@ -312,15 +317,31 @@ function downloadCombined() {
   els.flashChecksum.textContent = calculateChecksum(image);
 }
 
+function hexUsbId(value) {
+  return `0x${value.toString(16).toUpperCase().padStart(4, "0")}`;
+}
+
+function isDtronicsProgrammer(info) {
+  return info.usbVendorId === USB_VENDOR_ID && info.usbProductId === USB_PRODUCT_ID;
+}
+
+/** Chrome does not expose COM12; keep a fallback if a future getInfo() field appears. */
+function comPortName(info) {
+  const raw = info.displayName ?? info.name ?? info.path ?? info.portName ?? "";
+  const match = String(raw).match(/COM\d+/i);
+  return match ? match[0].toUpperCase() : "";
+}
+
 function portLabel(serialPort) {
   const info = serialPort.getInfo?.() ?? {};
+  if (isDtronicsProgrammer(info)) {
+    const com = comPortName(info);
+    const name = `${USB_MANUFACTURER} ${USB_PRODUCT}`;
+    return com ? `${com} ${name}` : name;
+  }
   const bits = [];
-  if (info.usbVendorId != null) {
-    bits.push(`VID 0x${info.usbVendorId.toString(16).toUpperCase().padStart(4, "0")}`);
-  }
-  if (info.usbProductId != null) {
-    bits.push(`PID 0x${info.usbProductId.toString(16).toUpperCase().padStart(4, "0")}`);
-  }
+  if (info.usbVendorId != null) bits.push(`VID ${hexUsbId(info.usbVendorId)}`);
+  if (info.usbProductId != null) bits.push(`PID ${hexUsbId(info.usbProductId)}`);
   return bits.length ? bits.join(" / ") : "Serial port";
 }
 
@@ -520,7 +541,9 @@ async function connect() {
   }
 
   try {
-    const selected = await navigator.serial.requestPort();
+    const selected = await navigator.serial.requestPort({
+      filters: SERIAL_PORT_FILTERS,
+    });
     await selected.open(SERIAL_OPTIONS);
     port = selected;
     renderPort(selected);
