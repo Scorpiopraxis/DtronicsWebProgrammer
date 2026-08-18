@@ -119,12 +119,11 @@
             <p id="status" class="status status-idle" role="status">Not connected</p>
           </div>
 
-          <p class="panel-copy">
-            The Windows app talks to the programmer as a serial port at <strong>38400 8N1</strong>.
-            In the browser we use the <strong>Web Serial</strong> API (Chrome / Edge). Connect first, then
-            send the combined image or open an existing 512&nbsp;KB <code>.bin</code>.
-            A full image takes about 2¼ minutes on the wire.
-          </p>
+          <ol class="help-steps">
+            <li>First connect the COM port.</li>
+            <li>Send the file or open an existing 512&nbsp;KB file.</li>
+            <li>A full image takes about 2.5 minutes to upload.</li>
+          </ol>
 
           <div class="actions">
             <button id="btn-connect" type="button" class="btn btn-primary">Connect</button>
